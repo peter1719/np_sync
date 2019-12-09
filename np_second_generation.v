@@ -2,7 +2,7 @@
 * Model of RISC without pipeline.
 * Three main task => fetch,execute,write
 */
-`timescale 1ns/10ps
+// `timescale 1ns/10ps
 module np(clk,reset,wr,address,dataIn,dataOut,halt);
 
 parameter WIDTH = 32;//32 bits instruction
@@ -11,8 +11,7 @@ parameter MEMSIZE = (1<<ADDRSIZE) ;//(2^12)
 parameter MAXREGS = 16;//Maximum # of registers
 parameter SBITS = 5;//Status register bits
 //Declare Registers ang Memory
-reg [WIDTH-1:0]MEM[0:MEMSIZE-1],// Memory
-               RFILE[0:MAXREGS-1],//Register file
+reg [WIDTH-1:0]RFILE[0:MAXREGS-1],//Register file
                ir,// Instruction register
                src1,src2;// Alu operation registers
 reg[WIDTH:0]result;// ALU result register
@@ -25,9 +24,10 @@ integer i;
 //define input and output
 input clk,reset;
 input [WIDTH-1:0]dataIn;
-output [ADDRSIZE-1:0]address;
+output reg [ADDRSIZE-1:0]address;
 output reg [WIDTH-1:0]dataOut;
 output reg wr,halt;
+//wr : 1 for write 0 for read
 // General definitions
 `define TRUE 1
 `define FALSE 0
@@ -48,8 +48,8 @@ output reg wr,halt;
 
 `define NOP 4'b0000
 `define BRA 4'b0001
-`define LD  4'b0010
-`define STR 4'b0011
+`define STR 4'b0010
+`define LD  4'b0011
 `define ADD 4'b0100
 `define MUL 4'b0101
 `define CMP 4'b0110
@@ -110,6 +110,7 @@ begin
         `CCZ:checkcond = `ZERO; 
         `CCN:checkcond = `NEG; 
         `CCA:checkcond = 1; 
+        default:checkcond = 0;
     endcase
 end
 endfunction
@@ -134,7 +135,9 @@ endtask
 // Main Tasks - fetch execute write_result
 task fetch;
 begin
-    ir = MEM[pc];
+    wr = 0;
+    address = pc;
+    ir = dataIn;
     pc = pc + 1;
 end
 endtask
@@ -142,29 +145,35 @@ endtask
 task execute;
 begin
     case (`OPCODE)
-    `NOP:$display("NOP");
+    `NOP: ;
     `BRA: begin
         if(checkcond(`CCODE)==1)
             pc = `DST; 
     end
-    `LD:begin
+    `LD: begin
         clearcondcode;
-        if(`SRCTYPE == `IMMTYPE)
-            RFILE[`DST] = `SRC;
-        else
-            RFILE[`DST] = MEM[`SRC];
-        setcondcode({1'b0,RFILE[`DST]});
+        if(`SRCTYPE == `IMMTYPE) begin
+            result = `SRC;
+        end
+        else begin
+            wr = 0;
+            address = `SRC;
+            result = dataIn;
+        end
+        setcondcode(result);
     end
     `STR: begin
         clearcondcode;
+        wr = 1;
+        address = `DST;
+        if(`SRCTYPE == `IMMTYPE) 
+            result = `SRC;
+        else 
+            result = RFILE[`SRC];
         if(`SRCTYPE == `IMMTYPE)
-            MEM[`DST] = `SRC;
+            setcondcode(result);
         else
-            MEM[`DST] = RFILE[`SRC];
-        if(`SRCTYPE == `IMMTYPE)
-            setcondcode({21'b0,`SRC});
-        else
-            setcondcode({1'b0,RFILE[`SRC]});
+            setcondcode(result);
     end
     `ADD: begin
         clearcondcode;
@@ -212,6 +221,7 @@ begin
             i = i - 1;
             src2 = result;
         end
+        setcondcode(result);
     end
     `SUB: begin
         clearcondcode;
@@ -227,9 +237,10 @@ begin
         result = src2 | src1;
         setcondcode(result);
       end
-    `HLT:begin
-        $display("Halt...");
-        $finish;
+    `HLT: begin
+        halt = 1;        
+        // $display("Halt...");
+        // $finish;
     end
     default:;
     endcase
@@ -239,34 +250,51 @@ endtask
 //Write the result in register file or memory
 task write_result;
 begin    
-    if((`OPCODE >= `ADD) && (`OPCODE < `HLT))begin
+    if((`OPCODE >= `LD) && (`OPCODE < `HLT))begin
         if(`DSTTYPE == `REGTYPE)begin
             RFILE[`DST] = result;
         end
         else begin
-            MEM[`DST] = result;
+            $display("error!!");
         end
+    end
+    else if((`OPCODE == `STR))begin
+        dataOut = result[31:0];
     end
 end
 endtask
 
+always@(*)begin
+    $display("%d %d %b %b", $time, pc, RFILE[0], RFILE[1]);
+end
 
 always @(posedge clk) begin
     if(reset) begin
-        state <= FET;
+        wr <= 0;
+        next_state <= FET;
         pc <= 0;
+        halt <= 0;
     end
     else begin
         state <= next_state;
-        pc <= pc;
+        $display("%d",pc);
     end
 end
 
 always @(state) begin
 	case(state)	
-	FET:next_state = EXE;
-	EXE:next_state = WB;
-	WB:next_state = FET;
+	FET:begin
+        fetch;
+        next_state = EXE;
+    end
+	EXE:begin
+        execute;
+        next_state = WB;
+    end
+	WB:begin
+        write_result;
+        next_state = FET;
+    end
 	default:next_state = FET;	
 	endcase	
 end
