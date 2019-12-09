@@ -5,6 +5,8 @@
 `else
 `include "np_second_generation.v"
 `include "memory.v"
+`include "inMemory.v"
+
 `endif
 //---------------------------------------------------------------------------------------------------------
 module test;
@@ -16,9 +18,16 @@ reg clk,reset;
 wire[WIDTH-1:0]CPU_dataIn;
 wire [WIDTH-1:0]CPU_dataOut;
 wire[ADDRSIZE-1:0]address;
-wire wr,halt;
-np mnp(.clk(clk),.reset(reset),.wr(wr),.address(address),.dataIn(CPU_dataIn),.dataOut(CPU_dataOut),.halt(halt));
+wire[WIDTH-1:0]CPU_in_dataIn;
+wire [WIDTH-1:0]CPU_in_dataOut;
+wire[ADDRSIZE-1:0]in_address;
+wire in_wr,wr,halt;
+np mnp(.clk(clk),.reset(reset),.address(address),.dataIn(CPU_dataIn),.dataOut(CPU_dataOut),.wr(wr),
+.in_wr(in_wr),.in_address(in_address),.in_dataIn(CPU_in_dataIn),.in_dataOut(CPU_in_dataOut),.halt(halt));
+
 memory mem(.dataOut(CPU_dataIn),.dataIn(CPU_dataOut),.address(address),.reset(reset),.wr(wr),.clk(clk));
+inMemory mem2(.dataOut(CPU_in_dataIn),.dataIn(CPU_in_dataOut),.address(in_address),.reset(reset),.wr(in_wr),.clk(clk));
+
 //---------------------------------------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------------------------------------

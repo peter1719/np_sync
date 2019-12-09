@@ -1,4 +1,4 @@
-module memory(dataOut,dataIn,address,reset,wr,clk);
+module inMemory(dataOut,dataIn,address,reset,wr,clk);
 parameter WIDTH = 32;//32 bits instruction
 parameter ADDRSIZE = 12;//size of mem(# of data)
 parameter MEMSIZE = (1<<ADDRSIZE);//(2^12)
@@ -11,7 +11,7 @@ reg [WIDTH-1:0]MEM[0:MEMSIZE-1];
 
 always @(posedge clk) begin
     if(reset) begin
-        $readmemb("data.txt", MEM);
+        $readmemb("risc.prog", MEM);
     end
     else if(wr) begin
         MEM[address] = dataIn;

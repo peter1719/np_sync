@@ -3,7 +3,7 @@
 * Three main task => fetch,execute,write
 */
 // `timescale 1ns/10ps
-module np(clk,reset,wr,address,dataIn,dataOut,halt);
+module np(clk,reset,in_wr,wr,in_address,in_dataIn,in_dataOut,address,dataIn,dataOut,halt);
 
 parameter WIDTH = 32;//32 bits instruction
 parameter ADDRSIZE = 12;//size of mem(# of data)
@@ -18,15 +18,18 @@ reg[WIDTH:0]result;// ALU result register
 reg[SBITS-1:0]psr;// Processer counter for condition check
 reg[ADDRSIZE-1:0]pc;// Program counter
 reg dir;// Rotate direction
-
+reg[ADDRSIZE-1:0]pc_r;
 reg[1:0]state,next_state;//define the state of the cpu
 integer i;
 //define input and output
 input clk,reset;
+input [WIDTH-1:0]in_dataIn;
 input [WIDTH-1:0]dataIn;
+output reg [ADDRSIZE-1:0]in_address;
 output reg [ADDRSIZE-1:0]address;
+output reg [WIDTH-1:0]in_dataOut;
 output reg [WIDTH-1:0]dataOut;
-output reg wr,halt;
+output reg wr,in_wr,halt;
 //wr : 1 for write 0 for read
 // General definitions
 `define TRUE 1
@@ -38,7 +41,7 @@ output reg wr,halt;
 `define SRC     ir[23:12]
 `define DST     ir[11:0]
 `define SRCTYPE ir[27]// source type 1 => imm 、0 => reg or mem
-`define DSTTYPE ir[26]// destination type 1 => imm 、0 => reg or mem
+`define DSTTYPE ir[26]// destin_ation type 1 => imm 、0 => reg or mem
 `define CCODE   ir[27:24]//condition code for branch
 `define SRCNT   ir[23:12]//Shift/rotate count -= left, +=right
 // Operand Types
@@ -77,7 +80,7 @@ output reg wr,halt;
 `define RIGHT 0// Rotate / Shift Right
 `define LEFT  1// Rotate / Shift Left
 
-parameter FET = 2'b00,EXE = 2'b01,WB = 2'b10;
+parameter FET = 2'b00,EXE = 2'b01,WB = 2'b10,RESET = 2'b11;
 
 // Function for ALU operands and result
 function[WIDTH-1:0] getsrc;
@@ -135,10 +138,8 @@ endtask
 // Main Tasks - fetch execute write_result
 task fetch;
 begin
-    wr = 0;
-    address = pc;
-    ir = dataIn;
-    pc = pc + 1;
+    in_wr = 0;
+    ir = in_dataIn;
 end
 endtask
 
@@ -147,20 +148,22 @@ begin
     case (`OPCODE)
     `NOP: ;
     `BRA: begin
-        if(checkcond(`CCODE)==1)
+        if(checkcond(`CCODE)==1)begin
             pc = `DST; 
+            $display("bra");
+        end
     end
     `LD: begin
         clearcondcode;
+        $display("LD");
         if(`SRCTYPE == `IMMTYPE) begin
             result = `SRC;
         end
         else begin
             wr = 0;
             address = `SRC;
-            result = dataIn;
         end
-        setcondcode(result);
+        //setcondcode(result);
     end
     `STR: begin
         clearcondcode;
@@ -170,40 +173,37 @@ begin
             result = `SRC;
         else 
             result = RFILE[`SRC];
-        if(`SRCTYPE == `IMMTYPE)
-            setcondcode(result);
-        else
-            setcondcode(result);
+        //setcondcode(result);
     end
     `ADD: begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src1 + src2;
-        setcondcode(result);
+        //setcondcode(result);
     end
     `MUL: begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src1 * src2;
-        setcondcode(result);
+        //setcondcode(result);
     end
     `CMP: begin // complement
         clearcondcode;
         src1 = getsrc(ir);
         result = ~src1;
-        setcondcode(result);
+        //setcondcode(result);
     end
-    `SHF:begin
+    `SHF:begin // test it
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         i = (src1[ADDRSIZE-1]>=0)?src1:-src1[ADDRSIZE-1:0];
         result = (i>0)?(src2>>i):(src2<<-i);
-        setcondcode(result);
+        //setcondcode(result);
     end
-    `ROT:begin
+    `ROT:begin // rebuild it
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);  
@@ -221,21 +221,21 @@ begin
             i = i - 1;
             src2 = result;
         end
-        setcondcode(result);
+        //setcondcode(result);
     end
     `SUB: begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src2 - src1;
-        setcondcode(result);
+        //setcondcode(result);
       end
      `OR: begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src2 | src1;
-        setcondcode(result);
+        //setcondcode(result);
       end
     `HLT: begin
         halt = 1;        
@@ -250,17 +250,41 @@ endtask
 //Write the result in register file or memory
 task write_result;
 begin    
-    if((`OPCODE >= `LD) && (`OPCODE < `HLT))begin
+    if((`OPCODE >= `ADD) && (`OPCODE < `HLT))begin
         if(`DSTTYPE == `REGTYPE)begin
             RFILE[`DST] = result;
         end
         else begin
             $display("error!!");
         end
+        setcondcode(result);
     end
-    else if((`OPCODE == `STR))begin
+    else if((`OPCODE == `LD))begin
+        if(`SRCTYPE != `IMMTYPE) begin // load from datamemory
+            wr = 0;
+            address = `SRC;
+            result = dataIn;
+        end
+        if(`DSTTYPE == `REGTYPE)begin
+            RFILE[`DST] = result;
+        end
+        else begin
+            $display("error!!");
+        end
+        setcondcode(result);
+    end
+    else if((`OPCODE == `STR))begin // store the value to memory
+        wr = 1;
+        address = `DST;
         dataOut = result[31:0];
+        setcondcode(result);
     end
+
+    if(!(`OPCODE == `BRA))begin 
+        pc = pc_r + 1;//next instruction        
+    end
+    in_address = pc;//preassign instruction address
+
 end
 endtask
 
@@ -270,18 +294,32 @@ end
 
 always @(posedge clk) begin
     if(reset) begin
-        wr <= 0;
-        next_state <= FET;
-        pc <= 0;
-        halt <= 0;
+        state <= RESET;
+        pc_r <= 0;
     end
     else begin
+        pc_r <= pc;
         state <= next_state;
-        $display("%d",pc);
+        //$display("%d",pc);
     end
 end
 
 always @(state) begin
+    pc = pc_r;
+    halt = 0;
+    in_wr = 0;
+    wr = 0;
+    address = 0;
+    /*
+    reg [WIDTH-1:0]RFILE[0:MAXREGS-1],//Register file
+               ir,// Instruction register
+               src1,src2;// Alu operation registers
+    reg[WIDTH:0]result;// ALU result register
+    reg[SBITS-1:0]psr;// Processer counter for condition check
+    output reg [ADDRSIZE-1:0]in_address;
+    output reg [WIDTH-1:0]in_dataOut;
+    output reg [WIDTH-1:0]dataOut;
+    */
 	case(state)	
 	FET:begin
         fetch;
@@ -295,7 +333,12 @@ always @(state) begin
         write_result;
         next_state = FET;
     end
-	default:next_state = FET;	
+	default:begin
+        next_state = FET;
+        pc = 0;	
+        in_address = pc;
+        ir = in_dataIn;
+    end
 	endcase	
 end
 
