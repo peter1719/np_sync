@@ -18,7 +18,7 @@ reg [WIDTH-1:0]RFILE_r[0:MAXREGS-1];//Register file
 reg[WIDTH:0]result;// ALU result register
 reg[SBITS-1:0]psr;// Processer counter for condition check
 reg[ADDRSIZE-1:0]pc;// Program counter
-reg dir;// Rotate direction
+reg[WIDTH*2-1:0] rot;// Rotate 
 reg[ADDRSIZE-1:0]pc_r;
 reg [WIDTH-1:0]ir_r;// Instruction register
 reg[WIDTH:0]result_r;// ALU result register
@@ -82,8 +82,8 @@ output reg wr,in_wr,halt;
 `define CCN 5 // Result is  negative
 `define CCA 0 // Always
 
-`define RIGHT 0// Rotate / Shift Right
-`define LEFT  1// Rotate / Shift Left
+// `define RIGHT 0// Rotate / Shift Right
+// `define LEFT  1// Rotate / Shift Left
 
 parameter FET = 2'b00,EXE = 2'b01,WB = 2'b10,RESET = 2'b11;
 
@@ -151,11 +151,11 @@ endtask
 task execute;
 begin
     case (`OPCODE)
-    `NOP: ;
+    `NOP: $display("NOP");   
     `BRA: begin
         if(checkcond(`CCODE)==1)begin
             pc = `DST; 
-            $display("bra");
+            $display("BRA");
         end
     end
     `LD: begin
@@ -171,6 +171,7 @@ begin
         //setcondcode(result);
     end
     `STR: begin
+        $display("STR");   
         clearcondcode;
         wr = 1;
         address = `DST;
@@ -185,6 +186,7 @@ begin
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src1 + src2;
+        $display("ADD");     
         //setcondcode(result);
     end
     `MUL: begin
@@ -193,42 +195,41 @@ begin
         src2 = getdst(ir);
         result = src1 * src2;
         //setcondcode(result);
+        $display("MUL"); 
     end
     `CMP: begin // complement
         clearcondcode;
         src1 = getsrc(ir);
         result = ~src1;
         //setcondcode(result);
+        $display("CMP");     
     end
     `SHF:begin // test it
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
-        i = (src1[ADDRSIZE-1]>=0)?src1:-src1[ADDRSIZE-1:0];
+        i = (src1[ADDRSIZE-1]==0)?src1:src1[ADDRSIZE-1:0]-4096;
         result = (i>0)?(src2>>i):(src2<<-i);
+        $display("SHF %d",i);        
         //setcondcode(result);
     end
     `ROT:begin // rebuild it
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);  
-        dir = src1[ADDRSIZE-1] >=0 ?`RIGHT:`LEFT;
-        i = (src1[ADDRSIZE-1]>=0)?src1:-src1[ADDRSIZE-1:0];
-        while(i > 0)begin
-            if(dir==`RIGHT)begin
-                result = src2 >> 1;
-                result[WIDTH-1] = src2[0];
-            end
-            else begin
-                result = src2 << 1;
-                result[0] = src2[WIDTH-1]; 
-            end
-            i = i - 1;
-            src2 = result;
+        i = (src1[ADDRSIZE-1]==0)?src1:src1[ADDRSIZE-1:0]-4096;
+        if(i>0) begin
+            rot = ({src2,src2}<<-i);
+            result = rot[31:0];
         end
-        //setcondcode(result);
+        else begin
+            rot = ({src2,src2}<<-i);
+            result = rot[63:32];
+        end
+        $display("ROT %d",i);        
     end
     `SUB: begin
+        $display("SUB");  
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
@@ -236,6 +237,7 @@ begin
         //setcondcode(result);
       end
      `OR: begin
+        $display("OR");   
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
@@ -292,7 +294,7 @@ end
 endtask
 
 always@(*)begin
-    $display("%d %d %h %h", $time, pc, RFILE[0], RFILE[1]);
+    $display("%d %d %b %h", $time, pc, RFILE[0], RFILE[1]);
 end
 
 always @(posedge clk) begin
@@ -357,6 +359,7 @@ always @(state) begin
     src2 = 0;
     result = result_r;
     psr = psr_r;
+    rot = 0;
     
     RFILE[0] = RFILE_r[0];
     RFILE[1] = RFILE_r[1];
