@@ -208,7 +208,7 @@ begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
-        i = (src1[ADDRSIZE-1]==0)?src1:src1[ADDRSIZE-1:0]-4096;
+        i = src1;
         result = (i>0)?(src2>>i):(src2<<-i);
         $display("SHF %d",i);        
         //setcondcode(result);
@@ -217,7 +217,7 @@ begin
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);  
-        i = (src1[ADDRSIZE-1]==0)?src1:src1[ADDRSIZE-1:0]-4096;
+        i = src1;
         if(i>0) begin
             rot = ({src2,src2}<<-i);
             result = rot[31:0];
@@ -229,11 +229,12 @@ begin
         $display("ROT %d",i);        
     end
     `SUB: begin
-        $display("SUB");  
+        // $display("SUB");  
         clearcondcode;
         src1 = getsrc(ir);
         src2 = getdst(ir);
         result = src2 - src1;
+        $display("SUB"); 
         //setcondcode(result);
       end
      `OR: begin
