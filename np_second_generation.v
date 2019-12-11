@@ -14,12 +14,17 @@ parameter SBITS = 5;//Status register bits
 reg [WIDTH-1:0]RFILE[0:MAXREGS-1],//Register file
                ir,// Instruction register
                src1,src2;// Alu operation registers
+reg [WIDTH-1:0]RFILE_r[0:MAXREGS-1];//Register file
 reg[WIDTH:0]result;// ALU result register
 reg[SBITS-1:0]psr;// Processer counter for condition check
 reg[ADDRSIZE-1:0]pc;// Program counter
 reg dir;// Rotate direction
 reg[ADDRSIZE-1:0]pc_r;
+reg [WIDTH-1:0]ir_r;// Instruction register
+reg[WIDTH:0]result_r;// ALU result register
+reg[SBITS-1:0]psr_r;// Processer counter for condition check
 reg[1:0]state,next_state;//define the state of the cpu
+
 integer i;
 //define input and output
 input clk,reset;
@@ -281,26 +286,61 @@ begin
     end
 
     if(!(`OPCODE == `BRA))begin 
-        pc = pc_r + 1;//next instruction        
+        pc = pc_r + 1;//next instruction ,preassign instruction address       
     end
-    in_address = pc;//preassign instruction address
-
 end
 endtask
 
 always@(*)begin
-    $display("%d %d %b %b", $time, pc, RFILE[0], RFILE[1]);
+    $display("%d %d %h %h", $time, pc, RFILE[0], RFILE[1]);
 end
 
 always @(posedge clk) begin
     if(reset) begin
         state <= RESET;
         pc_r <= 0;
+        result_r <= 0;
+        psr_r <= 0;
+        //
+        RFILE_r[0] <= 0;
+        RFILE_r[1] <= 0;
+        RFILE_r[2] <= 0;
+        RFILE_r[3] <= 0;
+        RFILE_r[4] <= 0;
+        RFILE_r[5] <= 0;
+        RFILE_r[6] <= 0;
+        RFILE_r[7] <= 0;
+        RFILE_r[8] <= 0;
+        RFILE_r[9] <= 0;
+        RFILE_r[10] <= 0;
+        RFILE_r[11] <= 0;
+        RFILE_r[12] <= 0;
+        RFILE_r[13] <= 0;
+        RFILE_r[14] <= 0;
+        RFILE_r[15] <= 0;        
     end
     else begin
         pc_r <= pc;
+        result_r <= result;
         state <= next_state;
-        //$display("%d",pc);
+        psr_r <= psr;
+        //
+        RFILE_r[0] <= RFILE[0];
+        RFILE_r[1] <= RFILE[1];
+        RFILE_r[2] <= RFILE[2];
+        RFILE_r[3] <= RFILE[3];
+        RFILE_r[4] <= RFILE[4];
+        RFILE_r[5] <= RFILE[5];
+        RFILE_r[6] <= RFILE[6];
+        RFILE_r[7] <= RFILE[7];
+        RFILE_r[8] <= RFILE[8];
+        RFILE_r[9] <= RFILE[9];
+        RFILE_r[10] <= RFILE[10];
+        RFILE_r[11] <= RFILE[11];
+        RFILE_r[12] <= RFILE[12];
+        RFILE_r[13] <= RFILE[13];
+        RFILE_r[14] <= RFILE[14];
+        RFILE_r[15] <= RFILE[15];
     end
 end
 
@@ -310,15 +350,32 @@ always @(state) begin
     in_wr = 0;
     wr = 0;
     address = 0;
+    in_address = pc;
+    ir = in_dataIn;
+    dataOut = 0;
+    src1 = 0;
+    src2 = 0;
+    result = result_r;
+    psr = psr_r;
+    
+    RFILE[0] = RFILE_r[0];
+    RFILE[1] = RFILE_r[1];
+    RFILE[2] = RFILE_r[2];
+    RFILE[3] = RFILE_r[3];
+    RFILE[4] = RFILE_r[4];
+    RFILE[5] = RFILE_r[5];
+    RFILE[6] = RFILE_r[6];
+    RFILE[7] = RFILE_r[7];
+    RFILE[8] = RFILE_r[8];
+    RFILE[9] = RFILE_r[9];
+    RFILE[10] = RFILE_r[10];
+    RFILE[11] = RFILE_r[11];
+    RFILE[12] = RFILE_r[12];
+    RFILE[13] = RFILE_r[13];
+    RFILE[14] = RFILE_r[14];
+    RFILE[15] = RFILE_r[15];
     /*
     reg [WIDTH-1:0]RFILE[0:MAXREGS-1],//Register file
-               ir,// Instruction register
-               src1,src2;// Alu operation registers
-    reg[WIDTH:0]result;// ALU result register
-    reg[SBITS-1:0]psr;// Processer counter for condition check
-    output reg [ADDRSIZE-1:0]in_address;
-    output reg [WIDTH-1:0]in_dataOut;
-    output reg [WIDTH-1:0]dataOut;
     */
 	case(state)	
 	FET:begin
@@ -333,11 +390,9 @@ always @(state) begin
         write_result;
         next_state = FET;
     end
-	default:begin
+	default:begin // for reset
         next_state = FET;
         pc = 0;	
-        in_address = pc;
-        ir = in_dataIn;
     end
 	endcase	
 end
